@@ -13,9 +13,11 @@ class ViewController: UIViewController {
     @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var startBackupButton: UIButton!
     
-    
+    var makeNetworkCallMutex = DispatchSemaphore(value: 1)
+    var assetUploadedMutex = DispatchSemaphore(value: 1)
     override func viewDidLoad() {
         super.viewDidLoad()
+        UIApplication.shared.isIdleTimerDisabled = true
         // Do any additional setup after loading the view.
         statusLabel.numberOfLines = 20
         statusLabel.lineBreakMode = .byWordWrapping
@@ -29,7 +31,7 @@ class ViewController: UIViewController {
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.includeAllBurstAssets = false
         fetchOptions.includeAssetSourceTypes = [.typeCloudShared,.typeUserLibrary,.typeiTunesSynced]
-        let results = PHAsset.fetchAssets(with: fetchOptions)
+        let results = PHAsset.fetchAssets(with:.image,options: fetchOptions)
         for i in 0..<results.count {
             assets.append((results[i]))
         }
@@ -44,11 +46,12 @@ class ViewController: UIViewController {
         let assetsToUpload = getMedia()
         var i=1
         for asset in assetsToUpload {
-            statusLabel.text = "Uploading \(i) asset"
+            assetUploadedMutex.wait()
             handleAsset(asset:asset)
             i = i+1
             
         }
+        statusLabel.text = "FINISHED"
     }
     
     func getUrl(endpoint: String) -> URL {
@@ -75,6 +78,7 @@ class ViewController: UIViewController {
     
     
     func sendChunkOverWire(d:Data,uuid:String,chunkNum:Int)->Bool {
+        makeNetworkCallMutex.wait()
         let session = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "part"))
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -87,19 +91,25 @@ class ViewController: UIViewController {
         ]
         let data = try! JSONSerialization.data(withJSONObject: jsonObj, options: .fragmentsAllowed)
         req.httpBody = data
-        var ret = true
+        var ret = false
         let completionHandler = {(data:Data?,response:URLResponse?,e:Error?)-> Void in
             if e != nil || (response as! HTTPURLResponse).statusCode != 200 {
                 print ("Chunk upload failed. Error:", e ?? "nil error")
                 ret = ret && false
+            } else {
+                ret = true
             }
+            self.makeNetworkCallMutex.signal()
         }
+       
         let dataTask = session.dataTask(with: req,completionHandler: completionHandler)
         dataTask.resume()
+        
         return ret
     }
     
     func finalizeMultipartUpload(numParts:Int,fileExtension:String,mediaType:PHAssetMediaType, uuid:String)->Bool {
+        makeNetworkCallMutex.wait()
         let sesh = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "save"))
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -125,11 +135,15 @@ class ViewController: UIViewController {
         _ = sesh.dataTask(with: req, completionHandler: { (data, response, error) in
             if error != nil || (response as! HTTPURLResponse).statusCode != 200 {
                 print ("Final multipart call failed. Error:", error ?? "nil error")
-                print((response as! HTTPURLResponse).statusCode )
+              //  print((response as! HTTPURLResponse).statusCode )
                 failed = true
             }
+            print("END ---------------------------\(uuid)")
+            self.makeNetworkCallMutex.signal()
+            self.assetUploadedMutex.signal()
           
         }).resume()
+        
         return true
 
     }
@@ -143,7 +157,7 @@ class ViewController: UIViewController {
         let fileExtension = splitFilename.count == 0 ? "" : String(splitFilename[splitFilename.count - 1]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         if fileExtension == "heic" || finalAssetResource == nil {
-           
+            assetUploadedMutex.signal() //TODO: remove it when you add logic here
         } else {
             let managerRequestOptions = PHAssetResourceRequestOptions()
             managerRequestOptions.isNetworkAccessAllowed = true
@@ -151,6 +165,7 @@ class ViewController: UIViewController {
             var data:[Data] = []
             var num:Int = 0
             let multipartUploadUuid = UUID().uuidString
+            print("Start-------------------------\(multipartUploadUuid)")
             let dataReceivedHandler = { (dataChunk:Data)-> Void in
                 data.append(dataChunk)
             }
@@ -171,8 +186,10 @@ class ViewController: UIViewController {
                         
                     }
                     print("done\(num)")
-                    self.finalizeMultipartUpload(numParts: num, fileExtension: ".jpeg", mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid)
-                    self.statusLabel.text = "Uploaded \(filename)"
+                    if(num>=1) {
+                        self.finalizeMultipartUpload(numParts: num, fileExtension: ".jpeg", mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid)
+                    }
+                    
             }
             }
             manager.requestData(for: finalAssetResource!, options: managerRequestOptions,dataReceivedHandler: dataReceivedHandler,completionHandler:completionHandler )
@@ -215,6 +232,8 @@ class ViewController: UIViewController {
             print ("Couldn't find preferred or backup asset resource; it probably needs to be downloaded from the cloud. Local resources for this asset were", assetResources)
             print ("Asked for", preferredResourceType, backupResourceType)
         }
+        print(chosenAssetResource?.assetLocalIdentifier)
+        print(chosenAssetResource?.originalFilename)
         return chosenAssetResource
         
         
