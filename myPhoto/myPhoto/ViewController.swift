@@ -13,10 +13,10 @@ class ViewController: UIViewController {
     @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var startBackupButton: UIButton!
     
-    //var asyncNetworkCallMutex = DispatchSemaphore(value: 100000000)
+   var asyncNetworkCallMutex = DispatchSemaphore(value: 2)
     var asyncNetworkCallDispatchGroupMap = [String:DispatchGroup]()
-    var finalizeMultipartUploadMutex = DispatchSemaphore(value:3)
-   // var assetUploadedMutex = DispatchSemaphore(value: 10000000)
+    var finalizeMultipartUploadMutex = DispatchSemaphore(value:1)
+     var assetUploadedMutex = DispatchSemaphore(value: 1)
     var results:PHFetchResult<PHAsset> = PHFetchResult<PHAsset>()
     
     
@@ -89,23 +89,44 @@ class ViewController: UIViewController {
                 assets.append((results[i]))
             }
         }
+        results = PHAsset.fetchAssets(with:.video,options: fetchOptions)
+        for i in 0..<results.count {
+            autoreleasepool{
+                assets.append((results[i]))
+            }
+        }
+        results = PHAsset.fetchAssets(with:.audio,options: fetchOptions)
+        for i in 0..<results.count {
+            autoreleasepool{
+                assets.append((results[i]))
+            }
+        }
+        results = PHAsset.fetchAssets(with:.unknown,options: fetchOptions)
+        for i in 0..<results.count {
+            autoreleasepool{
+                assets.append((results[i]))
+            }
+        }
+
         statusLabel.text = "Fetched assets"
+        assetsToUpload = assets
         return assets
         
     }
     
+    var assetsToUpload = [PHAsset]()
     func uploadMedia() {
         statusLabel.text = Constants.PREPARING_UPLOAD
         //TODO load and create DS from past uploads status
-        let assetsToUpload = getMedia()
-        var i=1
-        for asset in assetsToUpload {
-           // assetUploadedMutex.wait()
-            handleAsset(asset:asset)
-            i = i+1
+         self.getMedia()
+         self.statusLabel.text = "Total Assets \(self.assetsToUpload.count)"
+         for asset in self.assetsToUpload {
+                 
+            handleAsset(asset: asset, mediaType: asset.mediaType, isLivePhoto: asset.mediaSubtypes.contains(.photoLive))
             
-        }
-        statusLabel.text = "FINISHED"
+          }
+            
+       
     }
     
     func getUrl(endpoint: String) -> URL {
@@ -132,7 +153,7 @@ class ViewController: UIViewController {
     
     
     func sendChunkOverWire(d:Data,uuid:String,chunkNum:Int)->Bool {
-       // asyncNetworkCallMutex.wait()
+        asyncNetworkCallMutex.wait()
         asyncNetworkCallDispatchGroupMap[uuid]?.enter()
         let session = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "part"))
@@ -154,7 +175,7 @@ class ViewController: UIViewController {
             } else {
                 ret = true
             }
-           // self.asyncNetworkCallMutex.signal()
+            self.asyncNetworkCallMutex.signal()
             self.asyncNetworkCallDispatchGroupMap[uuid]?.leave()
         }
        
@@ -164,7 +185,7 @@ class ViewController: UIViewController {
         return ret
     }
     
-    func finalizeMultipartUpload(numParts:Int,fileExtension:String,mediaType:PHAssetMediaType, uuid:String)->Bool {
+    func finalizeMultipartUpload(numParts:Int,fileExtension:String,mediaType:PHAssetMediaType, uuid:String,isLivePhoto:Bool)->Bool {
         finalizeMultipartUploadMutex.wait()
         let sesh = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "save"))
@@ -181,7 +202,7 @@ class ViewController: UIViewController {
             "v": (mediaType == .image ? false : true),
             "d": uuid,
             "n": numParts,
-            "l": false,
+            "l": isLivePhoto,
             "x": fileExtension
         ]
         var failed = false
@@ -196,24 +217,24 @@ class ViewController: UIViewController {
             }
             print("END ---------------------------\(uuid)")
             self.finalizeMultipartUploadMutex.signal()
-          //  self.assetUploadedMutex.signal()
+            self.assetUploadedMutex.signal()
           
         }).resume()
         
-        return true
+        return !failed
 
     }
     
-    func handleAsset(asset:PHAsset)->Void {
+    func handleAsset(asset:PHAsset,mediaType:PHAssetMediaType,isLivePhoto:Bool)->Void {
         
-        let finalAssetResource = getFinalAssetResource(asset: asset,  mediaType: .image, isLivePhoto: false)
+        let finalAssetResource = getFinalAssetResource(asset: asset,  mediaType: mediaType, isLivePhoto: isLivePhoto)
         let filename = finalAssetResource == nil ? "" : finalAssetResource!.originalFilename
         statusLabel.text = "Uploading \(filename)"
         let splitFilename = filename.split(separator: ".")
         let fileExtension = splitFilename.count == 0 ? "" : String(splitFilename[splitFilename.count - 1]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let multipartUploadUuid = UUID().uuidString
         if  finalAssetResource == nil {
-          //  assetUploadedMutex.signal()
+            assetUploadedMutex.signal()
                 
         } else {
             let managerRequestOptions = PHAssetResourceRequestOptions()
@@ -246,8 +267,14 @@ class ViewController: UIViewController {
                     print("done\(num)")
                     dispatchGroup.wait()
                     if(num>=1) {
-                        var fe = fileExtension == "heic" ? ".heic" : "jpeg"
-                        self.finalizeMultipartUpload(numParts: num, fileExtension: fe, mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid)
+                        var fe = fileExtension == "heic" ? ".heic" : fileExtension
+                        let isLivePhoto = asset.mediaSubtypes.contains(.photoLive)
+                        var done = self.finalizeMultipartUpload(numParts: num, fileExtension: fe, mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid,isLivePhoto: isLivePhoto)
+                        if(done) {
+                           /* PHPhotoLibrary.shared().performChanges({
+                                PHAssetChangeRequest.deleteAssets([asset] as NSArray)
+                            })*/
+                        }
                     }
                     
             }
