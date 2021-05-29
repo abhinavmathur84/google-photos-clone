@@ -14,6 +14,7 @@
 		D7E33EA8266043FF0034DB5A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D7E33EA7266043FF0034DB5A /* Assets.xcassets */; };
 		D7E33EAB266043FF0034DB5A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D7E33EA9266043FF0034DB5A /* LaunchScreen.storyboard */; };
 		D7E33EB3266049710034DB5A /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E33EB2266049710034DB5A /* Constants.swift */; };
+		D7F1872A266180B400667250 /* VewControllerV1.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F18729266180B400667250 /* VewControllerV1.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 		D7E33EAA266043FF0034DB5A /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		D7E33EAC266043FF0034DB5A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D7E33EB2266049710034DB5A /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
+		D7F18729266180B400667250 /* VewControllerV1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VewControllerV1.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +68,7 @@
 				D7E33EA9266043FF0034DB5A /* LaunchScreen.storyboard */,
 				D7E33EAC266043FF0034DB5A /* Info.plist */,
 				D7E33EB2266049710034DB5A /* Constants.swift */,
+				D7F18729266180B400667250 /* VewControllerV1.swift */,
 			);
 			path = myPhoto;
 			sourceTree = "<group>";
@@ -143,6 +146,7 @@
 				D7E33EA3266043FE0034DB5A /* ViewController.swift in Sources */,
 				D7E33E9F266043FE0034DB5A /* AppDelegate.swift in Sources */,
 				D7E33EA1266043FE0034DB5A /* SceneDelegate.swift in Sources */,
+				D7F1872A266180B400667250 /* VewControllerV1.swift in Sources */,
 				D7E33EB3266049710034DB5A /* Constants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
