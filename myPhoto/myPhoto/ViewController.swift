@@ -13,8 +13,56 @@ class ViewController: UIViewController {
     @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var startBackupButton: UIButton!
     
-    var makeNetworkCallMutex = DispatchSemaphore(value: 1)
-    var assetUploadedMutex = DispatchSemaphore(value: 1)
+    //var asyncNetworkCallMutex = DispatchSemaphore(value: 100000000)
+    var asyncNetworkCallDispatchGroupMap = [String:DispatchGroup]()
+    var finalizeMultipartUploadMutex = DispatchSemaphore(value:3)
+   // var assetUploadedMutex = DispatchSemaphore(value: 10000000)
+    var results:PHFetchResult<PHAsset> = PHFetchResult<PHAsset>()
+    
+    
+    var isServerOnline = false {  // keep checking if the server is online every few seconds
+        didSet {
+            isServerOnlineWatcherTasks(newValue: isServerOnline)
+
+            // Keep performing a liveness check in case the connection goes down
+            DispatchQueue.main.asyncAfter(deadline: .now() + Constants.RETRY_SERVER_HEALTH_CHECK_INTERVAL_SECS) {
+                self.checkIsServerOnline()
+            }
+        }
+    }
+    
+    
+    // Set isServerOnline, which kicks off some watcher tasks AND schedules another checkIsServerOnline call for a few seconds later. Set setInstanceVariable to false to kick off watcher tasks WITHOUT scheduling another checkIsServerOnline call, which is useful if you have to manually call this function instead of relying on the automatically scheduled ones initiated by the call in viewDidLoad. This method is async if setInstanceVariable is true, synchronous otherwise (controlled by beforeFinishingLastUploadMutex)
+    func checkIsServerOnline(setInstanceVariable: Bool = true) {
+        let sesh = URLSession(configuration: .default)
+        var req = URLRequest(url: getUrl(endpoint: "health"))
+        req.httpMethod = "GET"
+        _ = sesh.dataTask(with: req, completionHandler: { (data, response, error) in
+            DispatchQueue.main.async {
+                let newValue = error == nil ? true : false
+                if (setInstanceVariable) {
+                    self.isServerOnline = newValue
+                } else {
+                    self.isServerOnlineWatcherTasks(newValue: newValue)
+                }
+            }
+        }).resume()
+    }
+    
+    func setUploadButtons(enable: Bool) {
+        startBackupButton.isEnabled = enable
+    }
+    
+    func isServerOnlineWatcherTasks(newValue: Bool) {
+        if newValue {  // if server is online
+            statusLabel.text = Constants.WELCOME_MSG
+            setUploadButtons(enable: true)
+        } else {  // if server is unreachable
+            statusLabel.text = Constants.SERVER_OFFLINE_MSG
+            setUploadButtons(enable: true)
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         UIApplication.shared.isIdleTimerDisabled = true
@@ -22,7 +70,10 @@ class ViewController: UIViewController {
         statusLabel.numberOfLines = 20
         statusLabel.lineBreakMode = .byWordWrapping
         statusLabel.text = Constants.CHECKING_SERVER_MSG
+        
+        checkIsServerOnline()
     }
+    
     
     func getMedia()->[PHAsset] {
         statusLabel.text = "Fetching assets"
@@ -30,10 +81,13 @@ class ViewController: UIViewController {
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.includeAllBurstAssets = false
+        
         fetchOptions.includeAssetSourceTypes = [.typeCloudShared,.typeUserLibrary,.typeiTunesSynced]
-        let results = PHAsset.fetchAssets(with:.image,options: fetchOptions)
+        results = PHAsset.fetchAssets(with:.image,options: fetchOptions)
         for i in 0..<results.count {
-            assets.append((results[i]))
+            autoreleasepool{
+                assets.append((results[i]))
+            }
         }
         statusLabel.text = "Fetched assets"
         return assets
@@ -46,7 +100,7 @@ class ViewController: UIViewController {
         let assetsToUpload = getMedia()
         var i=1
         for asset in assetsToUpload {
-            assetUploadedMutex.wait()
+           // assetUploadedMutex.wait()
             handleAsset(asset:asset)
             i = i+1
             
@@ -78,7 +132,8 @@ class ViewController: UIViewController {
     
     
     func sendChunkOverWire(d:Data,uuid:String,chunkNum:Int)->Bool {
-        makeNetworkCallMutex.wait()
+       // asyncNetworkCallMutex.wait()
+        asyncNetworkCallDispatchGroupMap[uuid]?.enter()
         let session = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "part"))
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -99,7 +154,8 @@ class ViewController: UIViewController {
             } else {
                 ret = true
             }
-            self.makeNetworkCallMutex.signal()
+           // self.asyncNetworkCallMutex.signal()
+            self.asyncNetworkCallDispatchGroupMap[uuid]?.leave()
         }
        
         let dataTask = session.dataTask(with: req,completionHandler: completionHandler)
@@ -109,7 +165,7 @@ class ViewController: UIViewController {
     }
     
     func finalizeMultipartUpload(numParts:Int,fileExtension:String,mediaType:PHAssetMediaType, uuid:String)->Bool {
-        makeNetworkCallMutex.wait()
+        finalizeMultipartUploadMutex.wait()
         let sesh = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "save"))
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -139,8 +195,8 @@ class ViewController: UIViewController {
                 failed = true
             }
             print("END ---------------------------\(uuid)")
-            self.makeNetworkCallMutex.signal()
-            self.assetUploadedMutex.signal()
+            self.finalizeMultipartUploadMutex.signal()
+          //  self.assetUploadedMutex.signal()
           
         }).resume()
         
@@ -155,21 +211,23 @@ class ViewController: UIViewController {
         statusLabel.text = "Uploading \(filename)"
         let splitFilename = filename.split(separator: ".")
         let fileExtension = splitFilename.count == 0 ? "" : String(splitFilename[splitFilename.count - 1]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        if fileExtension == "heic" || finalAssetResource == nil {
-            assetUploadedMutex.signal() //TODO: remove it when you add logic here
+        let multipartUploadUuid = UUID().uuidString
+        if  finalAssetResource == nil {
+          //  assetUploadedMutex.signal()
+                
         } else {
             let managerRequestOptions = PHAssetResourceRequestOptions()
             managerRequestOptions.isNetworkAccessAllowed = true
             let manager = PHAssetResourceManager.default()
             var data:[Data] = []
             var num:Int = 0
-            let multipartUploadUuid = UUID().uuidString
+           
             print("Start-------------------------\(multipartUploadUuid)")
             let dataReceivedHandler = { (dataChunk:Data)-> Void in
                 data.append(dataChunk)
             }
-            
+            var dispatchGroup = DispatchGroup()
+            asyncNetworkCallDispatchGroupMap[multipartUploadUuid] = dispatchGroup
             let completionHandler = { (e:Error?)->Void in
                 if(e != nil) {
                     self.statusLabel.text = "Failed Uploading \(filename)"
@@ -186,8 +244,10 @@ class ViewController: UIViewController {
                         
                     }
                     print("done\(num)")
+                    dispatchGroup.wait()
                     if(num>=1) {
-                        self.finalizeMultipartUpload(numParts: num, fileExtension: ".jpeg", mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid)
+                        var fe = fileExtension == "heic" ? ".heic" : "jpeg"
+                        self.finalizeMultipartUpload(numParts: num, fileExtension: fe, mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid)
                     }
                     
             }
@@ -232,11 +292,7 @@ class ViewController: UIViewController {
             print ("Couldn't find preferred or backup asset resource; it probably needs to be downloaded from the cloud. Local resources for this asset were", assetResources)
             print ("Asked for", preferredResourceType, backupResourceType)
         }
-        print(chosenAssetResource?.assetLocalIdentifier)
-        print(chosenAssetResource?.originalFilename)
         return chosenAssetResource
-        
-        
     }
     
     
@@ -245,6 +301,10 @@ class ViewController: UIViewController {
         uploadMedia()
     }
     
+    
+   
+
+      
 
 }
 
