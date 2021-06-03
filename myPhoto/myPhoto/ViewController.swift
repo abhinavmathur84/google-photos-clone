@@ -24,46 +24,16 @@ class ViewController: UIViewController {
     
     
     
-    var isServerOnline = false {  // keep checking if the server is online every few seconds
-        didSet {
-            isServerOnlineWatcherTasks(newValue: isServerOnline)
-
-            // Keep performing a liveness check in case the connection goes down
-            DispatchQueue.main.asyncAfter(deadline: .now() + Constants.RETRY_SERVER_HEALTH_CHECK_INTERVAL_SECS) {
-                self.checkIsServerOnline()
-            }
-        }
-    }
+   
     
     
-    // Set isServerOnline, which kicks off some watcher tasks AND schedules another checkIsServerOnline call for a few seconds later. Set setInstanceVariable to false to kick off watcher tasks WITHOUT scheduling another checkIsServerOnline call, which is useful if you have to manually call this function instead of relying on the automatically scheduled ones initiated by the call in viewDidLoad. This method is async if setInstanceVariable is true, synchronous otherwise (controlled by beforeFinishingLastUploadMutex)
-    func checkIsServerOnline(setInstanceVariable: Bool = true) {
-        let sesh = URLSession(configuration: .default)
-        var req = URLRequest(url: getUrl(endpoint: "health"))
-        req.httpMethod = "GET"
-        _ = sesh.dataTask(with: req, completionHandler: { (data, response, error) in
-            DispatchQueue.main.async {
-                let newValue = error == nil ? true : false
-                if (setInstanceVariable) {
-                    self.isServerOnline = newValue
-                } else {
-                    self.isServerOnlineWatcherTasks(newValue: newValue)
-                }
-            }
-        }).resume()
-    }
     
-    func setUploadButtons(enable: Bool) {
-        startBackupButton.isEnabled = enable
-    }
-    
+   
     func isServerOnlineWatcherTasks(newValue: Bool) {
         if newValue {  // if server is online
             statusLabel.text = Constants.WELCOME_MSG
-            setUploadButtons(enable: true)
         } else {  // if server is unreachable
             statusLabel.text = Constants.SERVER_OFFLINE_MSG
-            setUploadButtons(enable: true)
         }
     }
     
@@ -75,7 +45,7 @@ class ViewController: UIViewController {
         statusLabel.lineBreakMode = .byWordWrapping
         statusLabel.text = Constants.CHECKING_SERVER_MSG
         
-        checkIsServerOnline()
+        //checkIsServerOnline()
     }
     
     
@@ -135,6 +105,7 @@ class ViewController: UIViewController {
     func getUserName() -> String {
         return (userNameField.text == nil || userNameField.text!.count == 0) ? "vicky" : userNameField.text!
     }
+    
     func getUrl(endpoint: String) -> URL {
         var urlStringWithoutParams = ""
         var params = ""
