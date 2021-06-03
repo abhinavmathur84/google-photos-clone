@@ -1,0 +1,9 @@
+hamik*
+vicky*
+*.db
+env
+sumu_env
+__pycache__/
+*\~
+\#*
+tmp

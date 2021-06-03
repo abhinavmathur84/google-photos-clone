@@ -13,11 +13,15 @@ class ViewController: UIViewController {
     @IBOutlet weak var statusLabel: UILabel!
     @IBOutlet weak var startBackupButton: UIButton!
     
-   var asyncNetworkCallMutex = DispatchSemaphore(value: 2)
+    @IBOutlet weak var userNameField: UITextField!
+    var asyncNetworkCallMutex = DispatchSemaphore(value: 2)
     var asyncNetworkCallDispatchGroupMap = [String:DispatchGroup]()
     var finalizeMultipartUploadMutex = DispatchSemaphore(value:1)
      var assetUploadedMutex = DispatchSemaphore(value: 1)
     var results:PHFetchResult<PHAsset> = PHFetchResult<PHAsset>()
+    
+    
+    
     
     
     var isServerOnline = false {  // keep checking if the server is online every few seconds
@@ -81,7 +85,6 @@ class ViewController: UIViewController {
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.includeAllBurstAssets = false
-        
         fetchOptions.includeAssetSourceTypes = [.typeCloudShared,.typeUserLibrary,.typeiTunesSynced]
         results = PHAsset.fetchAssets(with:.image,options: fetchOptions)
         for i in 0..<results.count {
@@ -107,13 +110,13 @@ class ViewController: UIViewController {
                 assets.append((results[i]))
             }
         }
-
+        
         statusLabel.text = "Fetched assets"
         assetsToUpload = assets
         return assets
         
     }
-    
+
     var assetsToUpload = [PHAsset]()
     func uploadMedia() {
         statusLabel.text = Constants.PREPARING_UPLOAD
@@ -129,6 +132,9 @@ class ViewController: UIViewController {
        
     }
     
+    func getUserName() -> String {
+        return (userNameField.text == nil || userNameField.text!.count == 0) ? "vicky" : userNameField.text!
+    }
     func getUrl(endpoint: String) -> URL {
         var urlStringWithoutParams = ""
         var params = ""
@@ -139,7 +145,7 @@ class ViewController: UIViewController {
             params = passParam
         case "timestamps":
             urlStringWithoutParams = Constants.TIMESTAMPS_URL
-            params = passParam + "&u=" + "vicky"
+            params = passParam + "&u=" + getUserName()
         case "part":
             urlStringWithoutParams = Constants.PART_URL
         case "save":
@@ -185,7 +191,7 @@ class ViewController: UIViewController {
         return ret
     }
     
-    func finalizeMultipartUpload(numParts:Int,fileExtension:String,mediaType:PHAssetMediaType, uuid:String,isLivePhoto:Bool)->Bool {
+    func finalizeMultipartUpload(numParts:Int,fileExtension:String,mediaType:PHAssetMediaType, uuid:String,isLivePhoto:Bool,asset:PHAsset)->Bool {
         finalizeMultipartUploadMutex.wait()
         let sesh = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "save"))
@@ -194,7 +200,7 @@ class ViewController: UIViewController {
         let jsonObj: [String: Any?] = [
             "a": "aaa", // second part of relative path on server
             "p": Constants.HARD_CODED_PASSWORD_HOW_SHAMEFUL,
-            "u": "vicky",  // user name, used as first path of relative path on server where photos will be stored
+            "u": getUserName(),  // user name, used as first path of relative path on server where photos will be stored
             "t": 1234,
             "lat": 1244,
             "long": 1234,
@@ -214,6 +220,10 @@ class ViewController: UIViewController {
                 print ("Final multipart call failed. Error:", error ?? "nil error")
               //  print((response as! HTTPURLResponse).statusCode )
                 failed = true
+            } else {
+                PHPhotoLibrary.shared().performChanges({
+                     PHAssetChangeRequest.deleteAssets([asset] as NSArray)
+                 })
             }
             print("END ---------------------------\(uuid)")
             self.finalizeMultipartUploadMutex.signal()
@@ -269,11 +279,9 @@ class ViewController: UIViewController {
                     if(num>=1) {
                         var fe = fileExtension == "heic" ? ".heic" : fileExtension
                         let isLivePhoto = asset.mediaSubtypes.contains(.photoLive)
-                        var done = self.finalizeMultipartUpload(numParts: num, fileExtension: fe, mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid,isLivePhoto: isLivePhoto)
+                        var done = self.finalizeMultipartUpload(numParts: num, fileExtension: fe, mediaType: PHAssetMediaType.image, uuid: multipartUploadUuid,isLivePhoto: isLivePhoto,asset:asset)
                         if(done) {
-                           /* PHPhotoLibrary.shared().performChanges({
-                                PHAssetChangeRequest.deleteAssets([asset] as NSArray)
-                            })*/
+                          
                         }
                     }
                     
@@ -330,8 +338,5 @@ class ViewController: UIViewController {
     
     
    
-
-      
-
 }
 
