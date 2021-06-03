@@ -14,10 +14,10 @@ class ViewController: UIViewController {
     @IBOutlet weak var startBackupButton: UIButton!
     
     @IBOutlet weak var userNameField: UITextField!
-    var asyncNetworkCallMutex = DispatchSemaphore(value: 2)
+    //var asyncNetworkCallMutex = DispatchSemaphore(value: 2)
     var asyncNetworkCallDispatchGroupMap = [String:DispatchGroup]()
     var finalizeMultipartUploadMutex = DispatchSemaphore(value:1)
-     var assetUploadedMutex = DispatchSemaphore(value: 1)
+   //  var assetUploadedMutex = DispatchSemaphore(value: 1)
     var results:PHFetchResult<PHAsset> = PHFetchResult<PHAsset>()
     
     
@@ -130,7 +130,7 @@ class ViewController: UIViewController {
     
     
     func sendChunkOverWire(d:Data,uuid:String,chunkNum:Int)->Bool {
-        asyncNetworkCallMutex.wait()
+       // asyncNetworkCallMutex.wait()
         asyncNetworkCallDispatchGroupMap[uuid]?.enter()
         let session = URLSession(configuration: .default)
         var req = URLRequest(url: getUrl(endpoint: "part"))
@@ -152,7 +152,7 @@ class ViewController: UIViewController {
             } else {
                 ret = true
             }
-            self.asyncNetworkCallMutex.signal()
+        //    self.asyncNetworkCallMutex.signal()
             self.asyncNetworkCallDispatchGroupMap[uuid]?.leave()
         }
        
@@ -192,13 +192,13 @@ class ViewController: UIViewController {
               //  print((response as! HTTPURLResponse).statusCode )
                 failed = true
             } else {
-                PHPhotoLibrary.shared().performChanges({
+               /* PHPhotoLibrary.shared().performChanges({
                      PHAssetChangeRequest.deleteAssets([asset] as NSArray)
-                 })
+                 })*/
             }
             print("END ---------------------------\(uuid)")
             self.finalizeMultipartUploadMutex.signal()
-            self.assetUploadedMutex.signal()
+          //  self.assetUploadedMutex.signal()
           
         }).resume()
         
@@ -215,7 +215,7 @@ class ViewController: UIViewController {
         let fileExtension = splitFilename.count == 0 ? "" : String(splitFilename[splitFilename.count - 1]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let multipartUploadUuid = UUID().uuidString
         if  finalAssetResource == nil {
-            assetUploadedMutex.signal()
+           // assetUploadedMutex.signal()
                 
         } else {
             let managerRequestOptions = PHAssetResourceRequestOptions()

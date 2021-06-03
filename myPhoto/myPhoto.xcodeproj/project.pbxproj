@@ -15,6 +15,7 @@
 		D7E33EAB266043FF0034DB5A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D7E33EA9266043FF0034DB5A /* LaunchScreen.storyboard */; };
 		D7E33EB3266049710034DB5A /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E33EB2266049710034DB5A /* Constants.swift */; };
 		D7F1872A266180B400667250 /* VewControllerV1.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F18729266180B400667250 /* VewControllerV1.swift */; };
+		D7F187302669577B00667250 /* BGTransferController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F1872F2669577B00667250 /* BGTransferController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 		D7E33EAC266043FF0034DB5A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D7E33EB2266049710034DB5A /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		D7F18729266180B400667250 /* VewControllerV1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VewControllerV1.swift; sourceTree = "<group>"; };
+		D7F1872F2669577B00667250 /* BGTransferController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BGTransferController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +71,7 @@
 				D7E33EAC266043FF0034DB5A /* Info.plist */,
 				D7E33EB2266049710034DB5A /* Constants.swift */,
 				D7F18729266180B400667250 /* VewControllerV1.swift */,
+				D7F1872F2669577B00667250 /* BGTransferController.swift */,
 			);
 			path = myPhoto;
 			sourceTree = "<group>";
@@ -148,6 +151,7 @@
 				D7E33EA1266043FE0034DB5A /* SceneDelegate.swift in Sources */,
 				D7F1872A266180B400667250 /* VewControllerV1.swift in Sources */,
 				D7E33EB3266049710034DB5A /* Constants.swift in Sources */,
+				D7F187302669577B00667250 /* BGTransferController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
